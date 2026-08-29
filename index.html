@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>기상청 날씨 기반 오늘의 옷차림 추천</title>
+  <style>
+    /* --- CSS 스타일 정의 (외부 라이브러리/CDN 없음) --- */
+    :root {
+      --primary-navy: #0F2740;
+      --primary-teal: #0E7C86;
+      --teal-light: #E6F6F7;
+      --teal-dark: #095961;
+      --bg-color: #F4F7FA;
+      --card-bg: #FFFFFF;
+      --border-color: #E2E8F0;
+      --text-main: #1A202C;
+      --text-muted: #718096;
+      --obs-badge-bg: #E6FFFA;
+      --obs-badge-color: #0E7C86;
+      --fcst-badge-bg: #EBF8FF;
+      --fcst-badge-color: #2B6CB0;
+      --rain-badge-bg: #FFF5F5;
+      --rain-badge-color: #E53E3E;
+      --highlight-bg: #0F2740;
+      --highlight-text: #FFFFFF;
+      --highlight-accent: #38E1F0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 20px 12px 60px 12px;
+    }
+
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+    }
+
+    /* 상단 헤더 */
+    header {
+      background: linear-gradient(135deg, var(--primary-navy) 0%, #1A3E63 100%);
+      color: white;
+      padding: 24px 20px;
+      border-radius: 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(15, 39, 64, 0.15);
+      position: relative;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    h1 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-sub {
+      font-size: 0.9rem;
+      opacity: 0.85;
+      margin-top: 6px;
+    }
+
+    .location-tag {
+      background-color: rgba(255, 255, 255, 0.15);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    /* Mock 데이터 / 알림 배너 */
+    .alert-banner {
+      background-color: #FEFCBF;
+      border-left: 4px solid #D69E2E;
+      color: #744210;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      margin-bottom: 20px;
+      display: none;
+      line-height: 1.5;
+    }
+
+    /* 탭 네비게이션 */
+    .tabs-nav {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      background-color: #E2E8F0;
+      padding: 6px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 12px 6px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .tab-btn:hover {
+      color: var(--primary-navy);
+    }
+
+    .tab-btn.active {
+      background-color: var(--card-bg);
+      color: var(--primary-navy);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+
+    /* 메인 날씨 & 추천 카드 */
+    .main-card {
+      background-color: var(--card-bg);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      margin-bottom: 24px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .target-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--primary-navy);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-obs {
+      background-color: var(--obs-badge-bg);
+      color: var(--obs-badge-color);
+      border: 1px solid #B2F5EA;
+    }
+
+    .badge-fcst {
+      background-color: var(--fcst-badge-bg);
+      color: var(--fcst-badge-color);
+      border: 1px solid #BEE3F8;
+    }
+
+    /* 옷차림 추천 하이라이트 영역 */
+    .outfit-hero {
+      text-align: center;
+      padding: 20px 10px;
+      background: linear-gradient(180deg, var(--teal-light) 0%, #FFFFFF 100%);
+      border-radius: 14px;
+      border: 1px solid #D1ECEF;
+      margin-bottom: 20px;
+    }
+
+    .outfit-hero-label {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--teal-dark);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+
+    .outfit-hero-title {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--primary-navy);
+      margin-bottom: 8px;
+    }
+
+    .outfit-hero-desc {
+      font-size: 1rem;
+      color: #2D3748;
+      font-weight: 500;
+    }
+
+    /* 우산 안내 배너 */
+    .umbrella-banner {
+      background-color: var(--rain-badge-bg);
+      color: var(--rain-badge-color);
+      border: 1px solid #FED7D7;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    /* 기온 및 체감온도 표시 영역 */
+    .temp-summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .temp-box {
+      background-color: #F8FAFC;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .temp-box-label {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .temp-box-val {
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: var(--primary-navy);
+    }
+
+    .temp-box-sub {
+      font-size: 0.78rem;
+      color: var(--primary-teal);
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    /* 기온 비교 뱃지 (어제/내일 vs 지금) */
+    .diff-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-top: 6px;
+    }
+    .diff-warmer {
+      background-color: #FEEBC8;
+      color: #C05621;
+    }
+    .diff-cooler {
+      background-color: #EBF8FF;
+      color: #2B6CB0;
+    }
+    .diff-equal {
+      background-color: #EDF2F7;
+      color: #4A5568;
+    }
+
+    /* 관측 원본 데이터 (고정폭 글꼴) */
+    .raw-data-section {
+      background-color: #1E293B;
+      color: #F1F5F9;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .raw-data-title {
+      font-size: 0.82rem;
+      color: #94A3B8;
+      margin-bottom: 10px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .raw-data-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.88rem;
+    }
+
+    .raw-item {
+      background-color: #0F172A;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border-left: 3px solid var(--primary-teal);
+    }
+
+    .raw-key {
+      color: #94A3B8;
+      font-size: 0.75rem;
+    }
+
+    .raw-val {
+      color: #38E1F0;
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+
+    /* 추천 규칙 표 섹션 */
+    .rules-section {
+      background-color: var(--card-bg);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      margin-bottom: 24px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--primary-navy);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .rules-table-wrapper {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+    }
+
+    .rules-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+
+    .rules-table th {
+      background-color: #EDF2F7;
+      color: var(--primary-navy);
+      padding: 12px 14px;
+      font-weight: 700;
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    .rules-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-color);
+      transition: background-color 0.2s;
+    }
+
+    /* 현재 적용된 규칙 행 반전 강조 (핵심 요구사항) */
+    .rules-table tr.active-rule {
+      background-color: var(--highlight-bg) !important;
+      color: var(--highlight-text) !important;
+      font-weight: 700;
+    }
+
+    .rules-table tr.active-rule td {
+      border-color: #2D3748;
+    }
+
+    .rules-table tr.active-rule .rule-clothes {
+      color: var(--highlight-accent);
+      font-size: 1rem;
+    }
+
+    .current-indicator {
+      display: inline-block;
+      background-color: var(--primary-teal);
+      color: white;
+      font-size: 0.72rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    /* 안내문 섹션 */
+    .info-footer {
+      background-color: #EDF2F7;
+      border-radius: 14px;
+      padding: 20px;
+      font-size: 0.85rem;
+      color: #4A5568;
+      line-height: 1.7;
+    }
+
+    .info-footer h3 {
+      font-size: 0.95rem;
+      color: var(--primary-navy);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .info-footer ul {
+      padding-left: 20px;
+    }
+
+    .info-footer li {
+      margin-bottom: 6px;
+    }
+
+    /* 천체관측 추천 카드 */
+    .stargazing-card {
+      background-color: var(--card-bg);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      margin-bottom: 24px;
+    }
+
+    .stargazing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .stargazing-day {
+      background-color: #F8FAFC;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .stargazing-day:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .stargazing-date {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--primary-navy);
+      margin-bottom: 8px;
+    }
+
+    .stargazing-score {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--primary-teal);
+      margin-bottom: 6px;
+    }
+
+    .stargazing-recommendation {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #2D3748;
+      margin-bottom: 10px;
+    }
+
+    .stargazing-rating {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .stargazing-excellent {
+      background: linear-gradient(135deg, #E6FFFA 0%, #FFFFFF 100%);
+      border-color: #0E7C86;
+    }
+
+    .stargazing-good {
+      background: linear-gradient(135deg, #EBF8FF 0%, #FFFFFF 100%);
+      border-color: #2B6CB0;
+    }
+
+    .stargazing-fair {
+      background-color: #F8FAFC;
+      border-color: var(--border-color);
+    }
+
+    .stargazing-poor {
+      background: linear-gradient(135deg, #FFF5F5 0%, #FFFFFF 100%);
+      border-color: #E53E3E;
+    }
+
+    /* 로딩 표시 */
+    .loading-overlay {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 36px;
+      height: 36px;
+      border: 4px solid #CBD5E0;
+      border-top-color: var(--primary-teal);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 모바일 반응형 조정 */
+    @media (max-width: 600px) {
+      body { padding: 10px 8px 40px 8px; }
+      h1 { font-size: 1.2rem; }
+      .outfit-hero-title { font-size: 1.5rem; }
+      .temp-summary-grid { grid-template-columns: 1fr; gap: 10px; }
+      .tab-btn { font-size: 0.85rem; padding: 10px 4px; }
+      .rules-table th, .rules-table td { padding: 8px 10px; font-size: 0.82rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- 상단 헤더 -->
+    <header>
+      <div class="header-top">
+        <div>
+          <h1>🌤️ 오늘의 날씨 & 옷차림 추천</h1>
+          <p class="header-sub">기상청 API 실황 관측값과 단기예보를 비교 분석한 과학 실습 웹앱</p>
+        </div>
+        <div class="location-tag">
+          📍 부산 (nx=98, ny=76)
+        </div>
+      </div>
+    </header>
+
+    <!-- 알림 및 안내 배너 (API 키 미등록 / 403 오류 등) -->
+    <div id="alertBanner" class="alert-banner"></div>
+
+    <!-- 상단 탭 4개 -->
+    <nav class="tabs-nav">
+      <button class="tab-btn" id="tabYesterday" onclick="switchTab('yesterday')">어제 이맘때</button>
+      <button class="tab-btn active" id="tabNow" onclick="switchTab('now')">지금</button>
+      <button class="tab-btn" id="tabTomorrow" onclick="switchTab('tomorrow')">내일 아침 9시</button>
+      <button class="tab-btn" id="tabStargazing" onclick="switchTab('stargazing')">🌟 천체관측</button>
+    </nav>
+
+    <!-- 메인 컨텐츠 영역 -->
+    <div id="loading" class="loading-overlay">
+      <div class="spinner"></div>
+      <p>기상청 날씨 데이터를 불러오는 중입니다...</p>
+    </div>
+
+    <main id="content" style="display: none;">
+      <!-- 날씨 및 추천 카드 -->
+      <section class="main-card">
+        <div class="card-header">
+          <div class="target-title">
+            <span id="cardTitle">지금 날씨</span>
+            <span id="kindBadge" class="badge badge-obs">관측</span>
+          </div>
+          <div id="dateTimeLabel" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;"></div>
+        </div>
+
+        <!-- 우산 안내 배너 -->
+        <div id="umbrellaBanner" class="umbrella-banner">
+          <span>☔</span>
+          <span id="umbrellaText">비 또는 눈 예보가 있습니다! 외출 시 우산을 꼭 챙기세요.</span>
+        </div>
+
+        <!-- 옷차림 추천 히어로 섹션 -->
+        <div class="outfit-hero">
+          <div class="outfit-hero-label">체감온도 맞춤 추천 옷차림</div>
+          <div id="outfitTitle" class="outfit-hero-title">반팔, 얇은 셔츠</div>
+          <div id="outfitDesc" class="outfit-hero-desc">초여름/초가을 날씨! 가벼운 옷차림이 적당합니다.</div>
+        </div>
+
+        <!-- 기온 및 체감온도 요약 -->
+        <div class="temp-summary-grid">
+          <div class="temp-box">
+            <div class="temp-box-label">기온 (<span id="tempKindText">관측</span>)</div>
+            <div id="realTempDisplay" class="temp-box-val">27.0℃</div>
+            <div id="tempDiffDisplay"></div>
+          </div>
+          <div class="temp-box">
+            <div class="temp-box-label">간이 체감온도</div>
+            <div id="apparentTempDisplay" class="temp-box-val" style="color: var(--primary-teal);">27.5℃</div>
+            <div id="apparentFormulaType" class="temp-box-sub">습도 보정 공식 적용</div>
+          </div>
+        </div>
+
+        <!-- 기상청 원본 관측/예보 데이터 (고정폭 글꼴) -->
+        <div class="raw-data-section">
+          <div class="raw-data-title">
+            <span>💻 기상청 API 수신 원본 데이터 (Monospace)</span>
+            <span id="rawMeta">base: 20260829 1300</span>
+          </div>
+          <div id="rawGrid" class="raw-data-grid">
+            <!-- JS 동적 생성 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- 체감온도 구간별 옷차림 추천 규칙 테이블 -->
+      <section class="rules-section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>📋 체감온도 구간별 추천 규칙 표</span>
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">* 현재 해당 구간이 반전 강조됩니다.</span>
+        </div>
+
+        <div class="rules-table-wrapper">
+          <table class="rules-table">
+            <thead>
+              <tr>
+                <th style="width: 25%;">체감온도 구간</th>
+                <th style="width: 35%;">추천 의상</th>
+                <th style="width: 40%;">설명 및 팁</th>
+              </tr>
+            </thead>
+            <tbody id="rulesTableBody">
+              <!-- JS 동적 생성 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 천체관측 추천 섹션 (숨겨짐, stargazing 탭에서만 표시) -->
+      <section id="stargazingSection" class="stargazing-card" style="display: none;">
+        <div class="section-header">
+          <div class="section-title">
+            <span>🌟 2주 천체관측 적합도 예보</span>
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">* 밤 9시(21:00) 기준 적합도 계산</span>
+        </div>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;">
+          천체관측에 좋은 날씨 조건: 맑은 하늘, 낮은 습도(&lt;60%), 약한 바람(&lt;3m/s), 강수 없음
+        </p>
+        <div id="stargazingGrid" class="stargazing-grid">
+          <!-- JS 동적 생성 -->
+        </div>
+      </section>
+    </main>
+
+    <!-- 하단 설명 및 한계 안내문 -->
+    <footer class="info-footer">
+      <h3>💡 과학 수업 탐구 안내 및 유의사항</h3>
+      <ul>
+        <li>
+          <strong>관측과 예보의 차이:</strong>
+          '어제 이맘때'와 '지금'은 기상청 지상 기상관측장비(AWS)에서 실측한 <strong>관측(실황) 데이터</strong>이며,
+          '내일 아침 9시'는 슈퍼컴퓨터 수치예보모델을 통해 미리 계산한 <strong>예보 데이터</strong>입니다.
+        </li>
+        <li>
+          <strong>간이 체감온도 계산 원리:</strong>
+          동절기(기온 ≤ 10℃ & 풍속 ≥ 1.3m/s)에는 바람에 의한 피부 열 손실 공식(Wind Chill)을 적용하며,
+          하절기(기온 ≥ 25℃)에는 습도에 의한 증발 억제 효과를 반영한 간이 열지수(Heat Index) 공식을 적용합니다.
+        </li>
+        <li>
+          <strong>추천 옷차림의 한계:</strong>
+          본 추천은 대기 기온·습도·바람을 기준으로 한 과학적 가이드라인입니다. 직사광선(일조량), 교실 내 냉난방 가동 여부,
+          개인별 기초대사량과 추위/더위 민감도, 하루 중 일교차에 따라 차이가 있을 수 있으므로 겉옷을 덧입는 레이어드 룩을 권장합니다.
+        </li>
+      </ul>
+    </footer>
+  </div>
+
+  <script>
+    /* =========================================================================
+       1. 옷차림 추천 규칙 배열 (수정하기 쉽게 배열로 구조화)
+       ========================================================================= */
+    const OUTFIT_RULES = [
+      { min: 28, max: 999, label: "28℃ 이상", clothes: "민소매, 반팔", desc: "한여름 무더위! 얇고 통풍이 잘되는 옷을 입으세요." },
+      { min: 23, max: 27.99, label: "23 ~ 27℃", clothes: "반팔, 얇은 셔츠", desc: "초여름/초가을 날씨! 가벼운 옷차림이 적당합니다." },
+      { min: 20, max: 22.99, label: "20 ~ 22℃", clothes: "긴팔, 얇은 가디건", desc: "선선하고 활동하기 좋은 상쾌한 날씨입니다." },
+      { min: 17, max: 19.99, label: "17 ~ 19℃", clothes: "맨투맨, 얇은 니트", desc: "아침저녁으로 쌀쌀할 수 있으니 가벼운 겉옷을 챙기세요." },
+      { min: 12, max: 16.99, label: "12 ~ 16℃", clothes: "자켓, 야상, 가디건", desc: "환절기 쌀쌀한 날씨! 겉옷 착용이 필수적입니다." },
+      { min: 9, max: 11.99, label: "9 ~ 11℃", clothes: "트렌치코트, 얇은 패딩", desc: "쌀쌀함이 느껴지는 늦가을/초겨울 복장입니다." },
+      { min: 5, max: 8.99, label: "5 ~ 8℃", clothes: "코트, 가죽자켓", desc: "겨울의 시작! 보온성이 좋은 코트나 자켓을 입으세요." },
+      { min: -999, max: 4.99, label: "5℃ 미만", clothes: "두꺼운 패딩, 목도리", desc: "한겨울 혹한! 두꺼운 패딩과 방한용품으로 중무장하세요." }
+    ];
+
+    // 전역 상태 변수
+    let weatherData = null;
+    let stargazingData = null;
+    let currentTab = 'now'; // 'yesterday' | 'now' | 'tomorrow' | 'stargazing'
+
+    /* =========================================================================
+       2. 간이 체감온도 계산 함수
+       ========================================================================= */
+    function calculateApparentTemp(temp, humidity, windSpeed) {
+      const T = parseFloat(temp);
+      const H = parseFloat(humidity || 50);
+      const W = parseFloat(windSpeed || 0);
+
+      // (1) 기온 10℃ 이하이면서 풍속 1.3 m/s 이상: KMA 체감온도 (Wind Chill)
+      if (T <= 10 && W >= 1.3) {
+        const V = W * 3.6; // m/s를 km/h로 변환
+        const V_pow = Math.pow(V, 0.16);
+        const chill = 13.12 + (0.6215 * T) - (11.37 * V_pow) + (0.3965 * V_pow * T);
+        return {
+          temp: Math.round(chill * 10) / 10,
+          formula: "바람 체감 공식 적용 (T≤10℃, V≥1.3m/s)"
+        };
+      }
+      // (2) 기온 25℃ 이상: 간이 열지수 (Heat Index)
+      else if (T >= 25) {
+        const heat = T + (H - 60) * 0.05;
+        return {
+          temp: Math.round(heat * 10) / 10,
+          formula: "습도 보정 공식 적용 (T≥25℃)"
+        };
+      }
+      // (3) 그 외 조건: 기온 그대로 사용
+      return {
+        temp: Math.round(T * 10) / 10,
+        formula: "기온 직결 (표준 조건)"
+      };
+    }
+
+    /* =========================================================================
+       3. 체감온도에 해당하는 규칙 인덱스 탐색
+       ========================================================================= */
+    function findRuleIndex(apparentTemp) {
+      for (let i = 0; i < OUTFIT_RULES.length; i++) {
+        if (apparentTemp >= OUTFIT_RULES[i].min && apparentTemp <= OUTFIT_RULES[i].max) {
+          return i;
+        }
+      }
+      return OUTFIT_RULES.length - 1;
+    }
+
+    /* =========================================================================
+       4. 화면 렌더링 함수
+       ========================================================================= */
+    function render() {
+      if (!weatherData) return;
+
+      // 탭 버튼 활성화 상태 업데이트
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      if (currentTab === 'yesterday') document.getElementById('tabYesterday').classList.add('active');
+      if (currentTab === 'now') document.getElementById('tabNow').classList.add('active');
+      if (currentTab === 'tomorrow') document.getElementById('tabTomorrow').classList.add('active');
+      if (currentTab === 'stargazing') document.getElementById('tabStargazing').classList.add('active');
+
+      // 천체관측 탭인 경우 별도 렌더링
+      if (currentTab === 'stargazing') {
+        const mainCard = document.querySelector('.main-card');
+        const rulesSection = document.querySelector('.rules-section');
+        const stargazingSection = document.getElementById('stargazingSection');
+        
+        mainCard.style.display = 'none';
+        rulesSection.style.display = 'none';
+        stargazingSection.style.display = 'block';
+        
+        renderStargazingData();
+        return;
+      }
+
+      // 일반 날씨 탭
+      const mainCard = document.querySelector('.main-card');
+      const rulesSection = document.querySelector('.rules-section');
+      const stargazingSection = document.getElementById('stargazingSection');
+      
+      mainCard.style.display = 'block';
+      rulesSection.style.display = 'block';
+      stargazingSection.style.display = 'none';
+
+      const currentItem = weatherData[currentTab];
+      const nowItem = weatherData['now'];
+
+      if (!currentItem) return;
+
+      // 1) 탭 버튼 활성화 상태 업데이트
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      if (currentTab === 'yesterday') document.getElementById('tabYesterday').classList.add('active');
+      if (currentTab === 'now') document.getElementById('tabNow').classList.add('active');
+      if (currentTab === 'tomorrow') document.getElementById('tabTomorrow').classList.add('active');
+
+      // 2) 카드 헤더 및 배지 렌더링
+      const cardTitleElem = document.getElementById('cardTitle');
+      const kindBadgeElem = document.getElementById('kindBadge');
+      const dateTimeLabelElem = document.getElementById('dateTimeLabel');
+
+      cardTitleElem.textContent = currentItem.title;
+      kindBadgeElem.textContent = currentItem.kind;
+      
+      if (currentItem.kind === '관측') {
+        kindBadgeElem.className = 'badge badge-obs';
+        document.getElementById('tempKindText').textContent = '관측실황';
+      } else {
+        kindBadgeElem.className = 'badge badge-fcst';
+        document.getElementById('tempKindText').textContent = '예보값';
+      }
+
+      dateTimeLabelElem.textContent = `${currentItem.date} ${currentItem.time}`;
+
+      // 3) 체감온도 계산
+      const T = parseFloat(currentItem.T1H);
+      const H = parseFloat(currentItem.REH);
+      const W = parseFloat(currentItem.WSD);
+      const apparentResult = calculateApparentTemp(T, H, W);
+      const apparentTemp = apparentResult.temp;
+
+      // 4) 의상 추천 정보 업데이트
+      const activeRuleIdx = findRuleIndex(apparentTemp);
+      const activeRule = OUTFIT_RULES[activeRuleIdx];
+
+      document.getElementById('outfitTitle').textContent = activeRule.clothes;
+      document.getElementById('outfitDesc').textContent = activeRule.desc;
+
+      // 5) 기온 및 체감온도 수치 표시
+      document.getElementById('realTempDisplay').textContent = `${T.toFixed(1)}℃`;
+      document.getElementById('apparentTempDisplay').textContent = `${apparentTemp.toFixed(1)}℃`;
+      document.getElementById('apparentFormulaType').textContent = apparentResult.formula;
+
+      // 6) 어제/내일 탭: '지금'과의 기온 비교 배지
+      const diffContainer = document.getElementById('tempDiffDisplay');
+      diffContainer.innerHTML = '';
+      if (currentTab !== 'now' && nowItem) {
+        const nowT = parseFloat(nowItem.T1H);
+        const diff = Math.round((T - nowT) * 10) / 10;
+        
+        let diffBadge = document.createElement('span');
+        if (diff > 0) {
+          diffBadge.className = 'diff-badge diff-warmer';
+          diffBadge.textContent = `▲ 지금(${nowT.toFixed(1)}℃)보다 ${diff.toFixed(1)}℃ 높음`;
+        } else if (diff < 0) {
+          diffBadge.className = 'diff-badge diff-cooler';
+          diffBadge.textContent = `▼ 지금(${nowT.toFixed(1)}℃)보다 ${Math.abs(diff).toFixed(1)}℃ 낮음`;
+        } else {
+          diffBadge.className = 'diff-badge diff-equal';
+          diffBadge.textContent = `● 지금과 기온 동일`;
+        }
+        diffContainer.appendChild(diffBadge);
+      }
+
+      // 7) 우산 안내 배너 (강수형태 PTY != 0 또는 강수확률 POP >= 60%)
+      const pty = String(currentItem.PTY || '0');
+      const pop = parseFloat(currentItem.POP || 0);
+      const umbrellaBanner = document.getElementById('umbrellaBanner');
+      const umbrellaText = document.getElementById('umbrellaText');
+
+      if (pty !== '0' || pop >= 60) {
+        umbrellaBanner.style.display = 'flex';
+        if (pty === '1' || pty === '5') {
+          umbrellaText.textContent = `☔ 비 소식이 있습니다 (${currentItem.PTY_text}). 우산을 챙기세요!`;
+        } else if (pty === '2' || pty === '3' || pty === '6' || pty === '7') {
+          umbrellaText.textContent = `❄️ 눈/진눈깨비 소식이 있습니다 (${currentItem.PTY_text}). 방한용품과 우산을 준비하세요!`;
+        } else {
+          umbrellaText.textContent = `🌧️ 강수확률 ${pop}% 입니다. 외출 시 작은 우산을 챙기세요.`;
+        }
+      } else {
+        umbrellaBanner.style.display = 'none';
+      }
+
+      // 8) 고정폭 글꼴 원본 데이터 그리드 렌더링
+      renderRawGrid(currentItem);
+
+      // 9) 추천 규칙 표 렌더링 및 현재 행 반전 강조 (Active Row Highlight)
+      renderRulesTable(activeRuleIdx, apparentTemp);
+    }
+
+    /* =========================================================================
+       5. 원본 데이터 그리드 렌더링 (Monospace)
+       ========================================================================= */
+    function renderRawGrid(item) {
+      const grid = document.getElementById('rawGrid');
+      grid.innerHTML = '';
+
+      let rawItems = [];
+      if (item.kind === '관측') {
+        document.getElementById('rawMeta').textContent = `관측시각: ${item.baseDate} ${item.baseTime}`;
+        rawItems = [
+          { key: 'T1H (기온)', val: `${item.T1H} ℃` },
+          { key: 'REH (습도)', val: `${item.REH} %` },
+          { key: 'WSD (풍속)', val: `${item.WSD} m/s` },
+          { key: 'PTY (강수형태)', val: `${item.PTY} (${item.PTY_text})` },
+          { key: 'RN1 (1h강수)', val: `${item.RN1} mm` },
+          { key: 'VEC (풍향)', val: `${item.VEC} °` }
+        ];
+      } else {
+        document.getElementById('rawMeta').textContent = `발표: ${item.baseDate} ${item.baseTime} | 예보시각: ${item.fcstDate} ${item.fcstTime}`;
+        rawItems = [
+          { key: 'T1H/TMP (기온)', val: `${item.T1H} ℃` },
+          { key: 'REH (습도)', val: `${item.REH} %` },
+          { key: 'WSD (풍속)', val: `${item.WSD} m/s` },
+          { key: 'POP (강수확률)', val: `${item.POP} %` },
+          { key: 'PTY (강수형태)', val: `${item.PTY} (${item.PTY_text})` },
+          { key: 'SKY (하늘상태)', val: `${item.SKY} (${item.SKY_text})` }
+        ];
+      }
+
+      rawItems.forEach(r => {
+        const box = document.createElement('div');
+        box.className = 'raw-item';
+        box.innerHTML = `<div class="raw-key">${r.key}</div><div class="raw-val">${r.val}</div>`;
+        grid.appendChild(box);
+      });
+    }
+
+    /* =========================================================================
+       6. 추천 규칙 표 렌더링 & 현재 적용 행 반전 강조
+       ========================================================================= */
+    function renderRulesTable(activeIdx, apparentTemp) {
+      const tbody = document.getElementById('rulesTableBody');
+      tbody.innerHTML = '';
+
+      OUTFIT_RULES.forEach((rule, idx) => {
+        const tr = document.createElement('tr');
+        const isActive = (idx === activeIdx);
+
+        if (isActive) {
+          tr.className = 'active-rule';
+        }
+
+        tr.innerHTML = `
+          <td>
+            <strong>${rule.label}</strong>
+            ${isActive ? `<span class="current-indicator">적용 (${apparentTemp.toFixed(1)}℃)</span>` : ''}
+          </td>
+          <td class="rule-clothes">${rule.clothes}</td>
+          <td>${rule.desc}</td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    /* =========================================================================
+        7-2. 천체관측 데이터 렌더링
+        ========================================================================= */
+    function renderStargazingData() {
+      if (!stargazingData || stargazingData.length === 0) {
+        document.getElementById('stargazingGrid').innerHTML = '<p style="grid-column: 1/-1; text-align: center; padding: 40px;">천체관측 데이터를 로드할 수 없습니다.</p>';
+        return;
+      }
+
+      const grid = document.getElementById('stargazingGrid');
+      grid.innerHTML = '';
+
+      stargazingData.forEach(day => {
+        const dayCard = document.createElement('div');
+        dayCard.className = 'stargazing-day';
+
+        // 점수에 따른 클래스 추가
+        if (day.stargazing_score >= 80) {
+          dayCard.classList.add('stargazing-excellent');
+        } else if (day.stargazing_score >= 60) {
+          dayCard.classList.add('stargazing-good');
+        } else if (day.stargazing_score >= 40) {
+          dayCard.classList.add('stargazing-fair');
+        } else {
+          dayCard.classList.add('stargazing-poor');
+        }
+
+        dayCard.innerHTML = `
+          <div class="stargazing-date">${day.date}</div>
+          <div class="stargazing-score">${day.stargazing_score}</div>
+          <div class="stargazing-recommendation">${day.stargazing_recommendation}</div>
+          <div class="stargazing-rating">
+            <div>☁️ ${day.sky_text}</div>
+            <div>💧 습도 ${day.humidity.toFixed(0)}%</div>
+            <div>💨 풍속 ${day.wind_speed.toFixed(1)}m/s</div>
+            <div>🌡️ ${day.temp.toFixed(1)}℃</div>
+          </div>
+        `;
+
+        grid.appendChild(dayCard);
+      });
+    }
+
+    /* =========================================================================
+       7. 탭 전환 처리
+       ========================================================================= */
+    function switchTab(tabKey) {
+      currentTab = tabKey;
+      render();
+    }
+
+    /* =========================================================================
+       8. 초기 데이터 로드 (백엔드 app.py 호출)
+       ========================================================================= */
+    async function loadWeatherData() {
+      try {
+        const resp = await fetch('/api/weather?nx=98&ny=76');
+        if (!resp.ok) {
+          throw new Error(`HTTP Error ${resp.status}`);
+        }
+        const data = await resp.json();
+        weatherData = data;
+
+        // 안내 배너 처리
+        const alertBanner = document.getElementById('alertBanner');
+        if (data.mock || data.message) {
+          alertBanner.style.display = 'block';
+          alertBanner.innerHTML = `🔔 <strong>알림:</strong> ${data.message}`;
+        } else {
+          alertBanner.style.display = 'none';
+        }
+
+       // 천체관측 데이터 로드
+       try {
+         const starResp = await fetch('/api/stargazing?nx=98&ny=76');
+         if (starResp.ok) {
+           const starData = await starResp.json();
+           stargazingData = starData.data || [];
+         } else {
+           console.warn('천체관측 데이터 로드 실패, Mock 데이터 사용');
+           stargazingData = generateMockStargazingData();
+         }
+       } catch (err) {
+         console.warn('천체관측 API 호출 실패, Mock 데이터 사용:', err);
+         stargazingData = generateMockStargazingData();
+       }
+
+       // 로딩 해제 및 렌더링
+       document.getElementById('loading').style.display = 'none';
+       document.getElementById('content').style.display = 'block';
+       render();
+
+      } catch (err) {
+       console.error('날씨 데이터 수신 실패:', err);
+       document.getElementById('loading').innerHTML = `
+         <p style="color: #E53E3E; font-weight: bold;">⚠️ 데이터를 불러오지 못했습니다.</p>
+         <p style="font-size: 0.9rem; margin-top: 8px;">서버(app.py)가 실행 중인지 확인해주세요.</p>
+       `;
+      }
+    }
+
+    /* Mock 천체관측 데이터 생성 */
+    function generateMockStargazingData() {
+      const data = [];
+      const today = new Date();
+      for (let i = 0; i < 14; i++) {
+       const date = new Date(today);
+       date.setDate(date.getDate() + i);
+       const dateStr = date.toISOString().split('T')[0];
+        
+       const score = 75 - (i % 4) * 10;
+       const recommendation = score >= 80 ? "매우 좋음 ⭐⭐⭐" : 
+                             score >= 60 ? "좋음 ⭐⭐" :
+                             score >= 40 ? "보통 ⭐" : "좋지 않음 ✗";
+        
+       data.push({
+         date: dateStr,
+         temp: 20 + (i % 5),
+         humidity: 65 - (i % 10),
+         wind_speed: 2.5 + (i % 2),
+         pty: "0",
+         pty_text: "없음",
+         sky: i % 3 === 0 ? "1" : "3",
+         sky_text: i % 3 === 0 ? "맑음" : "구름많음",
+         stargazing_score: Math.max(0, score),
+         stargazing_recommendation: recommendation
+       });
+      }
+      return data;
+    }
+
+    // 페이지 시작 시 데이터 로드 실행
+    window.addEventListener('DOMContentLoaded', loadWeatherData);
+  </script>
+</body>
+</html>
