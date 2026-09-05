@@ -1,0 +1,13 @@
+{
+  "name": "weather-app-automation",
+  "version": "1.0.0",
+  "description": "Automation scripts for Firebase deployment and teacher role provisioning",
+  "scripts": {
+    "deploy:rules": "node ./scripts/deploy-firestore-rules.js",
+    "create:teachers": "node ./scripts/create-teacher-role.js ./teachers.csv"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.10.0"
+  },
+  "devDependencies": {}
+}
