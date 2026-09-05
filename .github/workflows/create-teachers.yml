@@ -1,0 +1,36 @@
+name: Create Teacher Roles
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  create-teachers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Write service account key
+        if: ${{ secrets.SERVICE_ACCOUNT_KEY }}
+        env:
+          SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY }}
+        run: |
+          echo "$SERVICE_ACCOUNT_KEY" | base64 --decode > serviceAccountKey.json
+
+      - name: Create teacher roles
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: serviceAccountKey.json
+        run: |
+          if [ ! -f serviceAccountKey.json ]; then echo "serviceAccountKey.json not found. Set SERVICE_ACCOUNT_KEY secret (base64-encoded)"; exit 1; fi
+          node scripts/create-teacher-role.js teachers.csv serviceAccountKey.json
