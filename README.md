@@ -258,6 +258,51 @@ HI = T + (H - 60) × 0.05
 
 ---
 
+## 🔐 Firebase Authentication + Firestore 설정 (Google 로그인 및 저장)
+
+다음 단계로 학생들이 실험 결과를 Google 계정으로 로그인하여 Firestore에 저장할 수 있도록 설정하는 방법입니다.
+
+1. Firebase 프로젝트 생성
+   - https://console.firebase.google.com 에서 새 프로젝트 생성
+
+2. 웹앱 등록
+   - Console > Project Overview > Add app > Web
+   - 앱 닉네임 입력 후 생성
+   - Firebase가 제공하는 `firebaseConfig` 객체를 복사
+
+3. Google 로그인 활성화
+   - Console > Authentication > Sign-in method > Google > Enable
+
+4. Firestore 활성화
+   - Console > Build > Firestore Database > Create database
+   - 모드: Native mode 선택
+
+5. 구성값 적용
+   - `index.html` 파일의 하단 스크립트에 있는 `firebaseConfig` 객체에 복사한 값을 붙여넣으세요.
+
+6. Firestore 보안 규칙 (테스트 중에는 다음 규칙을 사용)
+
+```
+// 테스트 용도: 인증된 사용자만 읽기/쓰기 허용
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+> 운영 환경에서는 보다 엄격한 규칙으로 제한하세요 (예: 컬렉션별 권한, 데이터 검증 등).
+
+7. 동작 확인
+   - GitHub Pages 웹 버전 또는 로컬에서 `index.html` 열기
+   - "Sign in with Google" 버튼 클릭 → 로그인
+   - "💾 실험 저장" 클릭 → Firestore에 `experiments` 컬렉션에 저장됩니다.
+
+---
+
 ## 📜 라이선스
 
 이 프로젝트는 **MIT 라이선스** 하에 배포됩니다.

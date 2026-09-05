@@ -300,6 +300,11 @@
       <h1>🌤️ 오늘의 날씨 & 옷차림 추천</h1>
       <p class="header-sub">기상청 데이터 기반 체감온도 분석 (웹 버전 - Mock 데이터)</p>
     </header>
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;">
+      <div id="userInfo" style="color:#1A202C; font-weight:600;"></div>
+      <button id="signInBtn" class="tab-btn" style="padding:8px 12px;">Sign in with Google</button>
+      <button id="signOutBtn" class="tab-btn" style="padding:8px 12px; display:none;">Sign out</button>
+    </div>
 
     <nav class="tabs-nav">
       <button class="tab-btn active" onclick="switchTab('today')">🌡️ 오늘</button>
@@ -337,6 +342,10 @@
       <div style="background-color: #F8FAFC; border-radius: 12px; padding: 16px; margin-top: 16px;">
         <h3 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 12px; color: var(--primary-navy);">💡 현재 상황</h3>
         <div id="weatherDetails" style="font-size: 0.9rem; line-height: 1.6;"></div>
+        <div style="margin-top:12px;">
+          <button id="saveExpBtn" class="tab-btn" style="padding:10px 14px;">💾 실험 저장</button>
+          <span id="saveStatus" style="margin-left:12px;color:var(--text-muted)"></span>
+        </div>
       </div>
     </div>
 
@@ -524,7 +533,117 @@
     // 초기 로드
     window.addEventListener('DOMContentLoaded', () => {
       updateTodayCard();
+      // Load Firebase SDKs and initialize
+      loadFirebaseSdk(initFirebase);
+
+      // Wire up sign in/out buttons
+      document.getElementById('signInBtn').addEventListener('click', () => signInWithGoogle());
+      document.getElementById('signOutBtn').addEventListener('click', () => signOut());
+      document.getElementById('saveExpBtn').addEventListener('click', () => saveExperiment());
     });
+
+    /* ------------------ Firebase SDK Loader & Auth/Firestore ------------------ */
+    function loadFirebaseSdk(callback) {
+      const scripts = [
+        'https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js',
+        'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js',
+        'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js'
+      ];
+      let loaded = 0;
+      scripts.forEach(src => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = () => {
+          loaded += 1;
+          if (loaded === scripts.length) callback();
+        };
+        s.onerror = () => console.warn('Firebase SDK failed to load:', src);
+        document.head.appendChild(s);
+      });
+    }
+
+    // Paste your Firebase config here after creating a Firebase web app
+    const firebaseConfig = {
+      // apiKey: "YOUR_API_KEY",
+      // authDomain: "YOUR_PROJECT.firebaseapp.com",
+      // projectId: "YOUR_PROJECT_ID",
+      // storageBucket: "YOUR_PROJECT.appspot.com",
+      // messagingSenderId: "...",
+      // appId: "..."
+    };
+
+    let auth = null;
+    let db = null;
+    let currentUser = null;
+
+    function initFirebase() {
+      try {
+        if (!firebaseConfig || !firebaseConfig.apiKey) {
+          console.info('Firebase config not set. Authentication/Firestore disabled.');
+          return;
+        }
+        firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        db = firebase.firestore();
+
+        // Auth state listener
+        auth.onAuthStateChanged(user => {
+          currentUser = user;
+          const userInfo = document.getElementById('userInfo');
+          const signInBtn = document.getElementById('signInBtn');
+          const signOutBtn = document.getElementById('signOutBtn');
+          if (user) {
+            userInfo.textContent = user.displayName || user.email;
+            signInBtn.style.display = 'none';
+            signOutBtn.style.display = 'inline-block';
+          } else {
+            userInfo.textContent = '';
+            signInBtn.style.display = 'inline-block';
+            signOutBtn.style.display = 'none';
+          }
+        });
+
+      } catch (e) {
+        console.error('Firebase init error', e);
+      }
+    }
+
+    function signInWithGoogle() {
+      if (!auth) return alert('Firebase not configured. See README to set up Firebase.');
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).catch(err => alert('Sign-in failed: ' + err.message));
+    }
+
+    function signOut() {
+      if (!auth) return;
+      auth.signOut();
+    }
+
+    async function saveExperiment() {
+      const status = document.getElementById('saveStatus');
+      status.textContent = '';
+      if (!auth || !currentUser) {
+        status.textContent = '로그인이 필요합니다.';
+        return;
+      }
+      try {
+        status.textContent = '저장 중...';
+        const weather = generateWeatherData();
+        const stargazing = generateStargazingData();
+        const doc = {
+          userId: currentUser.uid,
+          userEmail: currentUser.email,
+          timestamp: new Date().toISOString(),
+          weather: weather,
+          stargazingSample: stargazing.slice(0, 7) // store first week sample
+        };
+        const res = await db.collection('experiments').add(doc);
+        status.textContent = '저장 완료 ✅';
+      } catch (e) {
+        console.error(e);
+        status.textContent = '저장 실패: ' + (e.message || e);
+      }
+    }
   </script>
 </body>
 </html>
