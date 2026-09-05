@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // experiments collection: users may create their own experiment documents
+    match /experiments/{docId} {
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.userId
+                    && request.resource.data.keys().hasAll(['userId','userEmail','timestamp','weather','stargazingSample'])
+                    && request.resource.data.userId is string
+                    && request.resource.data.userEmail is string
+                    && request.resource.data.timestamp is string
+                    && request.resource.data.weather is map
+                    && request.resource.data.stargazingSample is list
+                    && request.resource.data.stargazingSample.size() <= 14;
+
+      // Owner or teacher can update/delete
+      allow update, delete: if request.auth != null && (
+          request.auth.uid == resource.data.userId
+          || (exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.isTeacher == true)
+      );
+
+      // Read: owner or teacher
+      allow get, list: if request.auth != null && (
+          resource.data.userId == request.auth.uid
+          || (exists(/databases/$(database)/documents/roles/$(request.auth.uid)) && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.isTeacher == true)
+      );
+    }
+
+    // roles collection: read by authenticated users to check teacher role (cannot be written by clients)
+    match /roles/{userId} {
+      allow read: if request.auth != null;
+      allow write: if false; // manage via Console or Admin SDK
+    }
+
+    // Default: deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -303,6 +303,58 @@ service cloud.firestore {
 
 ---
 
+## 🔧 자동 설계된 Firestore 스키마 및 보안 규칙
+
+프로젝트에 자동으로 추가된 보안 규칙(`firestore.rules`)과 권장 스키마는 다음과 같습니다.
+
+컬렉션: `experiments`
+- 문서 ID: Firestore 자동 생성 ID
+- 필드:
+  - userId (string) - 작성자 UID
+  - userEmail (string) - 작성자 이메일
+  - timestamp (string, ISO)
+  - weather (map) - 기온, 습도, 풍속 등
+  - stargazingSample (array) - 최대 14일치 샘플
+
+컬렉션: `roles`
+- 문서 ID: 사용자 UID
+- 필드:
+  - isTeacher (boolean) - 교사 권한 부여용
+
+보안 규칙 주요 내용:
+- 문서 생성(create): 인증된 사용자만 가능, `request.auth.uid`와 `userId`가 일치해야 하며 요청 페이로드를 검증
+- 문서 읽기(get/list): 문서 소유자 또는 `roles/{uid}.isTeacher == true`인 사용자만 가능
+- 문서 수정/삭제(update/delete): 문서 소유자 또는 교사 역할만 가능
+- `roles` 컬렉션은 클라이언트 쓰기 금지(관리자는 Firebase Console 또는 Admin SDK로 설정)
+
+### 규칙 배포 방법
+1. Firebase CLI 설치:
+```bash
+npm install -g firebase-tools
+```
+2. Firebase 초기화 (프로젝트 루트):
+```bash
+firebase login
+firebase init firestore
+# rules 파일 선택 시 여기에 있는 firestore.rules 파일을 사용
+```
+3. 규칙 배포:
+```bash
+firebase deploy --only firestore:rules
+```
+
+> 참고: 규칙은 테스트 환경과 운영 환경에서 다르게 구성하세요.
+
+---
+
+## 🎓 역할(Teacher) 설정
+- Firebase Console > Firestore > 문서 추가
+  - 컬렉션: `roles`
+  - 문서 ID: 교사 사용자 UID (예: `abc123UID`)
+  - 필드: `isTeacher` (boolean) = true
+
+---
+
 ## 📜 라이선스
 
 이 프로젝트는 **MIT 라이선스** 하에 배포됩니다.

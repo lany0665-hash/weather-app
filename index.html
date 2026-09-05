@@ -344,8 +344,10 @@
         <div id="weatherDetails" style="font-size: 0.9rem; line-height: 1.6;"></div>
         <div style="margin-top:12px;">
           <button id="saveExpBtn" class="tab-btn" style="padding:10px 14px;">💾 실험 저장</button>
+          <button id="listExpBtn" class="tab-btn" style="padding:10px 14px; display:none;">📂 내 실험 보기</button>
           <span id="saveStatus" style="margin-left:12px;color:var(--text-muted)"></span>
         </div>
+        <div id="experimentsList" style="margin-top:12px; display:none; background:#fff; padding:12px; border-radius:8px; border:1px solid var(--border-color);"></div>
       </div>
     </div>
 
@@ -540,7 +542,36 @@
       document.getElementById('signInBtn').addEventListener('click', () => signInWithGoogle());
       document.getElementById('signOutBtn').addEventListener('click', () => signOut());
       document.getElementById('saveExpBtn').addEventListener('click', () => saveExperiment());
+      document.getElementById('listExpBtn').addEventListener('click', () => listExperiments());
     });
+
+    // List user's experiments
+    async function listExperiments() {
+      const listDiv = document.getElementById('experimentsList');
+      listDiv.style.display = 'block';
+      listDiv.innerHTML = '<em>불러오는 중...</em>';
+      if (!auth || !currentUser) {
+        listDiv.innerHTML = '<strong>로그인 필요</strong>';
+        return;
+      }
+      try {
+        const snapshot = await db.collection('experiments').where('userId', '==', currentUser.uid).orderBy('timestamp', 'desc').limit(50).get();
+        if (snapshot.empty) {
+          listDiv.innerHTML = '<div>저장된 실험이 없습니다.</div>';
+          return;
+        }
+        const items = [];
+        snapshot.forEach(doc => {
+          const d = doc.data();
+          items.push(`<div style="padding:8px 0;border-bottom:1px solid #EEE;"><strong>${d.timestamp}</strong><br/>` +
+                     `<small>${d.weather.temp}℃, ${d.weather.humidity}%</small><div>${JSON.stringify(d.stargazingSample)}</div></div>`);
+        });
+        listDiv.innerHTML = items.join('');
+      } catch (e) {
+        console.error(e);
+        listDiv.innerHTML = '불러오기 실패: ' + (e.message || e);
+      }
+    }
 
     /* ------------------ Firebase SDK Loader & Auth/Firestore ------------------ */
     function loadFirebaseSdk(callback) {
@@ -592,14 +623,18 @@
           const userInfo = document.getElementById('userInfo');
           const signInBtn = document.getElementById('signInBtn');
           const signOutBtn = document.getElementById('signOutBtn');
+          const listExpBtn = document.getElementById('listExpBtn');
           if (user) {
             userInfo.textContent = user.displayName || user.email;
             signInBtn.style.display = 'none';
             signOutBtn.style.display = 'inline-block';
+            listExpBtn.style.display = 'inline-block';
           } else {
             userInfo.textContent = '';
             signInBtn.style.display = 'inline-block';
             signOutBtn.style.display = 'none';
+            listExpBtn.style.display = 'none';
+            document.getElementById('experimentsList').style.display = 'none';
           }
         });
 
@@ -637,6 +672,13 @@
           weather: weather,
           stargazingSample: stargazing.slice(0, 7) // store first week sample
         };
+        // Client-side validation to match security rules
+        if (!doc.userId || typeof doc.userId !== 'string') throw new Error('Invalid userId');
+        if (!doc.userEmail || typeof doc.userEmail !== 'string') throw new Error('Invalid userEmail');
+        if (!doc.timestamp || typeof doc.timestamp !== 'string') throw new Error('Invalid timestamp');
+        if (!doc.weather || typeof doc.weather !== 'object') throw new Error('Invalid weather');
+        if (!Array.isArray(doc.stargazingSample) || doc.stargazingSample.length > 14) throw new Error('Invalid stargazing sample');
+
         const res = await db.collection('experiments').add(doc);
         status.textContent = '저장 완료 ✅';
       } catch (e) {
